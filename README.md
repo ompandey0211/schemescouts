@@ -1,10 +1,29 @@
 # SchemeScout
 
-SchemeScout is a starter app for evaluating startup profiles against deterministic, citation-backed government-scheme rules. Eligibility checks are code-based; missing profile data or missing citations produce an `unknown` result.
+SchemeScout helps startups review government schemes and incubator programmes
+using deterministic eligibility rules, source citations, and applicant-provided
+profile data.
+
+**Hackathon:** TBD
+
+**Team:** Om Pandey — role TBD (name taken from the repository commit history)
+
+**LLM provider / model:** TBD
+
+## Repository
+
+Clone the repository:
+
+`git clone <copilot-ref kind="repo" target-id="https://github.com/ompandey0211/schemescouts" label="ompandey0211/schemescouts" />`
+
+```text
+cd schemescouts
+```
 
 ## Run locally
 
-Use Python 3.11, create a virtual environment, install dependencies, and launch Streamlit:
+Use Python 3.11, create a virtual environment, install dependencies, and launch
+Streamlit:
 
 ```text
 python -m venv .venv
@@ -13,104 +32,142 @@ python -m pip install -r requirements.txt
 python -m streamlit run app/streamlit_app.py
 ```
 
-Run the test suite with `python -m pytest`.
+Run the tests with `python -m pytest`.
 
-## Data
+## Built with GitHub Copilot
 
-Three example startup profiles are provided in `data/profiles`. The `data/schemes` directory intentionally has no scheme definitions. Add a scheme only after reviewing its official source; each rule must include a citation with the source document, page number, and exact clause. Do not infer eligibility requirements or fill missing profile values.
+The repository history records Copilot App as a co-author on the two
+implementation commits. The exact Copilot mode and usage metrics are not
+recorded in the repository.
 
-Incubator and accelerator programme definitions belong in `data/incubators`.
-That directory intentionally contains no fabricated programme documents.
-When official material is available, add `<id>.pdf` and `<id>.json`; the JSON
-uses the same targeting fields as schemes and must set `"kind": "incubator"`.
-The app reuses the citation-verified PDF extraction and deterministic rule
-evaluation pipeline, and shows no matches until definitions and source PDFs
-are supplied. Fit scores are deterministic: `src.matching.FIT_SCORE_WEIGHTS`
-assigns 20 points each to sector, stage, and location matches, and 40 points
-to the share of extracted eligibility rules met. Missing profile values do
-not match a restricted target; with no extracted rules, the eligibility
-component receives no points. Every displayed eligibility result retains its
-verified source clause and page.
+| Metric | Result |
+| --- | --- |
+| Pytest passed / total | 182 / 182 (100%) |
+| Estimated time saved | TBD |
+| Copilot suggestions accepted / reviewed | TBD |
 
-## Extract rules from a scheme PDF
+## Features and roadmap
 
-Configure an OpenAI-compatible chat-completions provider before calling
-`src.extract.extract_rules`:
+- [x] Load and validate startup profiles and JSON scheme definitions.
+- [x] Extract eligibility rules from scheme PDFs and retain only rules whose
+  exact quoted clause is present on the cited page.
+- [x] Evaluate cited eligibility rules deterministically; missing profile
+  values or citations result in `unknown`.
+- [x] Filter and rank schemes by sector, stage, and state targeting.
+- [x] Show incubator and accelerator matches with deterministic 0–100 fit
+  scores, reasons, eligibility results, and verified source clauses.
+- [x] Analyze uploaded profile PDFs and let the user review and confirm
+  extracted profile fields.
+- [x] Show unmet and unknown requirements, supporting-document checklists, and
+  dated action plans.
+- [x] Download application drafts and plans as Markdown; download plans as PDF.
+- [x] Offer optional Hindi translations through the configured LLM provider.
+- [ ] Add official incubator and accelerator programme PDFs and definitions.
+- [ ] Add reviewed official scheme definitions and source PDFs.
 
-```powershell
-$env:SCHEMESCOUT_LLM_BASE_URL = "https://provider.example/v1"
-$env:SCHEMESCOUT_LLM_MODEL = "your-model"
-$env:SCHEMESCOUT_LLM_API_KEY = "your-api-key"
+The checked matching and evaluation features are implemented, but no official
+scheme or incubator programme documents are currently included. Until those
+sources and their reviewed definitions are supplied, the app reports no
+available matches rather than inventing programmes, eligibility rules, or
+citations.
+
+## Data and source requirements
+
+Three example startup profiles are provided in `data/profiles`. Scheme source
+PDFs and their JSON definitions belong in `data/schemes`. Incubator and
+accelerator source PDFs and definitions belong in `data/incubators`. Each
+definition uses `id`, `name`, and optional `sectors`, `stages`, and `states`
+targeting lists. Incubator definitions must also set `"kind": "incubator"`;
+existing scheme definitions default to `"kind": "scheme"`.
+
+Add programmes only after reviewing their official source. Every eligibility
+rule must cite its source document, page number, and exact clause. Do not infer
+requirements or fill missing profile values. The deterministic incubator
+score weights are defined in `src/matching.py`: sector, stage, and location
+matches each contribute 20 points, and the share of extracted eligibility
+rules met contributes up to 40 points. Missing profile values do not match a
+restricted target; no extracted rules contribute no eligibility points.
+
+## Configure an LLM provider
+
+The app uses an OpenAI-compatible chat-completions provider for extracting
+rules from PDF text and optional Hindi translations. The provider and model
+used for this project have not been identified and are marked TBD above. Set
+the following environment variables to your own provider configuration before
+using these features:
+
+```text
+SCHEMESCOUT_LLM_BASE_URL=TBD
+SCHEMESCOUT_LLM_MODEL=TBD
+SCHEMESCOUT_LLM_API_KEY=TBD
 ```
 
-The API key is optional for providers that do not require authentication.
-Verified extractions are cached as `data/schemes/<scheme-id>.rules.json` and
-refreshed when the source page text changes. Rules without an exact quoted
-clause found on the cited page are discarded; conditions that cannot map to a
-profile field are returned for manual review.
+The API key is optional for providers that do not require authentication. Do
+not commit real API keys. Verified extractions are cached alongside their
+source PDFs and refreshed when the source page text changes. Conditions that
+cannot be mapped to a profile field are retained for manual review with their
+source citations.
 
-## Application planning
+## Application planning and drafts
 
-`src.plan.find_gaps` ranks unmet and unknown requirements, while
-`src.plan.build_checklist` maps cited profile-field rules to supporting
-documents and where to obtain them. `src.plan.make_plan` creates dated,
-prioritized actions that retain their rule IDs and source clauses. When the
-LLM provider above is configured, it is used only to rephrase each action;
-dates, priorities, requirements, and citations remain code-controlled. An
-optional `llm_call` argument can be passed for testing or custom phrasing.
-
-## Run the agent pipeline
-
-Add a scheme definition as `data/schemes/<scheme-id>.json` with `id`, `name`,
-and optional `sectors`, `stages`, and `states` targeting lists. Put its official
-source PDF at `data/schemes/<scheme-id>.pdf`. Empty targeting lists mean the
-scheme is unrestricted for that dimension. Profiles may include a `stage`;
-when a scheme targets stages and the profile stage is missing, it is not
-selected. The agent extracts citation-verified rules into the adjacent
-`<scheme-id>.rules.json` cache and returns a structured report:
-
-```python
-from src.agent import run_agent
-
-report = run_agent("startup-001")
-print(report.model_dump_json(indent=2))
-```
-
-Pipeline tool events are logged and included in `report.events`. Each
-recoverable step is attempted at most three times; a scheme failure is
-reported without hiding successful results for other schemes.
-
-## Application draft
-
-`src.draft.generate_draft(profile, scheme, results)` produces a Markdown
-application draft using only fields supplied in the profile. Missing values
-are shown as `[NEEDS INPUT]`; each eligibility rule includes its result and
-source citation. The Streamlit scheme view displays the draft and provides a
-Markdown download. Review all draft content before submitting; it is generated
-guidance, not an official application.
+The planning pipeline ranks unmet and unknown requirements, maps cited
+profile-field rules to supporting documents, and creates dated, prioritized
+actions that retain their rule IDs and source clauses. If an LLM provider is
+configured, it may rephrase action text; dates, priorities, requirements, and
+citations remain code-controlled. Application drafts use only supplied profile
+values and mark missing information for review.
 
 ## Hindi output
 
-Choose **हिन्दी** from the Streamlit output-language selector to translate
-verdict summaries, gap explanations, checklist instructions, and action steps.
-This uses the configured OpenAI-compatible chat-completions provider described
-above. If it is not configured or a translation fails, the app reports that
-clearly and shows the original English. Citations, quoted clauses, document
-and scheme names, page numbers, dates, numeric values, and official terms such
-as DPIIT are protected from translation. UI text uses a Devanagari-capable
-system-font fallback. Hindi output includes: “यह केवल मार्गदर्शन है, कानूनी या
-वित्तीय सलाह नहीं।” The Markdown download preserves Hindi; because the built-in
-PDF font is Latin-only, the PDF download remains English.
+Choose **हिन्दी** from the output-language selector to translate verdict
+summaries, gap explanations, checklist instructions, and action steps. Hindi
+translation requires the configured LLM provider. If configuration is absent
+or a translation fails, the app reports the problem and displays the original
+English. Citations, quoted clauses, document and scheme names, page numbers,
+dates, numeric values, and protected official terms are not translated. The
+Markdown download preserves Hindi; the built-in PDF font is Latin-only, so
+PDF plan downloads are English.
 
-## Autofill from uploaded documents
+## Architecture
 
-The Streamlit profile view accepts PDF uploads for a DPIIT recognition
-certificate, certificate of incorporation, and one-page financial summary.
-After extraction, review and edit the values, source pages, and confidence in
-the table; values are applied only when their **Confirm** box is selected.
-Conflicting assertions from different documents are flagged and require
-selecting at most one source. Fields that are not found remain empty. Uploaded
-PDFs are processed using temporary files that are removed after analysis; the
-app does not persist uploaded files after the session. Document extraction
-requires the configured LLM provider above and is guidance for review, not
-verification of the uploaded document.
+```text
+.
+├── .github/
+│   ├── agents/                 # Copilot agent profile
+│   ├── copilot-instructions.md # Repository-specific coding instructions
+│   └── workflows/              # GitHub Actions checks
+├── .gitignore
+├── app/
+│   └── streamlit_app.py        # Streamlit user interface
+├── data/
+│   ├── incubators/
+│   │   └── .gitkeep            # Official programme data not yet supplied
+│   ├── profiles/               # Three example startup profiles
+│   └── schemes/
+│       └── .gitkeep            # Official scheme data not yet supplied
+├── scripts/
+│   └── .gitkeep                # Reserved; no helper scripts committed yet
+├── src/
+│   ├── __init__.py
+│   ├── agent.py                # End-to-end scheme processing pipeline
+│   ├── doc_analysis.py         # Uploaded-PDF profile extraction and review
+│   ├── draft.py                # Application draft generation
+│   ├── evaluate.py             # Deterministic, citation-backed rule evaluation
+│   ├── extract.py              # PDF text rule extraction and citation verification
+│   ├── ingest.py               # Profile, definition, and PDF loading
+│   ├── matching.py             # Deterministic incubator fit scores and ranking
+│   ├── models.py               # Pydantic data models
+│   ├── plan.py                 # Gaps, checklist, and dated action planning
+│   └── translate.py            # Optional translation with protected citations
+├── tests/                      # Pytest unit and application tests
+│   └── __init__.py
+├── LICENSE
+├── PROMPTS.md
+├── README.md
+└── requirements.txt
+```
+
+## Disclaimer
+
+SchemeScout provides guidance only, not legal or financial advice. Review
+official programme documents and consult the relevant authority before acting.
