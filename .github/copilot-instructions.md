@@ -1,0 +1,5 @@
+- Python 3.11, Pydantic v2, pytest.
+- Never state an eligibility conclusion without a Citation (document, page, exact clause).
+- If data is missing, return status "unknown". Never guess.
+- Eligibility checks are deterministic code, not LLM calls.
+- Every function gets a unit test using the sample profiles in data/profiles.
