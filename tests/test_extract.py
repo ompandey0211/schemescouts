@@ -284,6 +284,30 @@ def test_extract_rules_reextracts_when_document_pages_change(tmp_path: Path) -> 
     assert llm_call.call_count == 2
 
 
+def test_extract_rules_force_refresh_bypasses_matching_cache(tmp_path: Path) -> None:
+    pages = [PDFPage(page_number=1, text="Source clause.")]
+    first_call = Mock(return_value='{"rules": [], "manual_review": []}')
+    extract_rules(
+        pages,
+        "refresh",
+        "scheme.pdf",
+        cache_dir=tmp_path,
+        llm_call=first_call,
+    )
+    refresh_call = Mock(return_value='{"rules": [], "manual_review": []}')
+
+    extract_rules(
+        pages,
+        "refresh",
+        "scheme.pdf",
+        cache_dir=tmp_path,
+        llm_call=refresh_call,
+        force_refresh=True,
+    )
+
+    refresh_call.assert_called_once()
+
+
 def test_extract_rules_rejects_empty_document_name(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="document"):
         extract_rules([], "scheme", " ", cache_dir=tmp_path, llm_call=Mock())

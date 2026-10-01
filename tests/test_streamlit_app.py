@@ -17,7 +17,9 @@ from app.streamlit_app import (
     plan_markdown,
     plan_pdf,
     rank_relevant_schemes,
+    render_scheme_verification,
     scheme_match_score,
+    verification_is_stale,
 )
 from src.doc_analysis import (
     DocumentAnalysis,
@@ -66,6 +68,32 @@ def test_scheme_match_score_counts_target_dimensions() -> None:
     )
 
     assert scheme_match_score(scheme) == 2
+
+
+def test_verification_stale_boundary_is_strictly_older_than_six_months() -> None:
+    assert not verification_is_stale(date(2026, 4, 1), date(2026, 10, 1))
+    assert verification_is_stale(date(2026, 3, 31), date(2026, 10, 1))
+    assert not verification_is_stale(None, date(2026, 10, 1))
+
+
+def test_render_scheme_verification_shows_date_and_stale_warning(monkeypatch) -> None:
+    scheme = Scheme(
+        id="stale",
+        name="Stale Scheme",
+        last_verified_date=date(2026, 1, 1),
+    )
+    caption = Mock()
+    warning = Mock()
+    monkeypatch.setattr(streamlit_app.st, "caption", caption)
+    monkeypatch.setattr(streamlit_app.st, "warning", warning)
+    monkeypatch.setattr(streamlit_app, "verification_is_stale", lambda _date: True)
+
+    render_scheme_verification(scheme)
+
+    caption.assert_called_once_with("Last verified: 2026-01-01")
+    warning.assert_called_once_with(
+        "Stale Scheme has not been verified in over six months."
+    )
 
 
 def test_plan_markdown_includes_gaps_checklist_steps_and_disclaimer() -> None:

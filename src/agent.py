@@ -8,7 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.evaluate import OverallVerdict, evaluate, evaluate_scheme, overall_verdict
 from src.extract import ManualReviewItem, RuleExtraction, extract_rules
-from src.ingest import PDFPage, load_pdf_pages, load_profiles, load_schemes
+from src.ingest import (
+    PDFPage,
+    load_pdf_pages,
+    load_profiles,
+    load_schemes,
+    scheme_pdf_path,
+)
 from src.models import Profile, RuleResult, Scheme, SchemeEvaluation
 from src.plan import (
     ChecklistItem,
@@ -177,7 +183,7 @@ def extract_rules_tool(
     events: list[AgentEvent] | None = None,
 ) -> RuleExtraction:
     """Read a scheme PDF and extract (or load cached) citation-verified rules."""
-    pdf_path = schemes_dir / f"{scheme.id}.pdf"
+    pdf_path = scheme_pdf_path(scheme, schemes_dir)
     pages: list[PDFPage] = load_pdf_pages(pdf_path)
     extracted = extract_rules(
         pages,

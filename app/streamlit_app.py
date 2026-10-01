@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from calendar import monthrange
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -95,6 +96,38 @@ def rank_relevant_schemes(profile: Profile, schemes: list[Scheme]) -> list[Schem
 def scheme_match_score(scheme: Scheme) -> int:
     """Score explicit target dimensions for relevant-scheme ranking."""
     return sum(bool(targets) for targets in (scheme.sectors, scheme.stages, scheme.states))
+
+
+def verification_is_stale(
+    last_verified_date: date | None, today: date | None = None
+) -> bool:
+    """Treat verification as stale only when it is strictly older than six months."""
+    if last_verified_date is None:
+        return False
+    current_date = today or date.today()
+    cutoff_month = current_date.month - 6
+    cutoff_year = current_date.year
+    while cutoff_month <= 0:
+        cutoff_month += 12
+        cutoff_year -= 1
+    cutoff = date(
+        cutoff_year,
+        cutoff_month,
+        min(current_date.day, monthrange(cutoff_year, cutoff_month)[1]),
+    )
+    return last_verified_date < cutoff
+
+
+def render_scheme_verification(scheme: Scheme) -> None:
+    """Show a scheme's verification date and flag stale source reviews."""
+    verified_date = (
+        scheme.last_verified_date.isoformat()
+        if scheme.last_verified_date
+        else "date unavailable"
+    )
+    st.caption(f"Last verified: {verified_date}")
+    if verification_is_stale(scheme.last_verified_date):
+        st.warning(f"{scheme.name} has not been verified in over six months.")
 
 
 def plan_markdown(
@@ -592,8 +625,10 @@ else:
             scheme = analysis["scheme"]
             if "error" in analysis:
                 st.warning(f"{index}. {scheme.name}: {analysis['error']}")
+                render_scheme_verification(scheme)
                 continue
             st.write(f"**{index}. {scheme.name}**")
+            render_scheme_verification(scheme)
             target_dimensions = []
             if scheme.sectors:
                 target_dimensions.append(f"Sector: {', '.join(scheme.sectors)}")
