@@ -1,131 +1,211 @@
-# SchemeScout
+# 🧭 SchemeScout
 
-SchemeScout is a starter app for evaluating startup profiles against deterministic, citation-backed government-scheme rules. Eligibility checks are code-based; missing profile data or missing citations produce an `unknown` result.
+**An AI agent that matches startups to official government schemes, checks eligibility clause by clause, and generates an actionable application plan.**
 
-## Run locally
+> Built with GitHub Copilot for the [Hackathon Name] · Track: AI Agent for Startup Schemes
 
-Use Python 3.11, create a virtual environment, install dependencies, and launch Streamlit:
+[Demo Video](#) · [Live App](#) · [Slides](#)
 
-```text
+---
+
+## 🎯 The Problem
+
+Indian startups have access to dozens of government schemes, but:
+- Scheme documents are long, scattered, and written in legal language.
+- Founders can't easily tell which schemes fit them or why they were rejected.
+- Missing one document or condition can delay an application by months.
+
+## 💡 The Solution
+
+SchemeScout takes a startup profile and turns official scheme documents into a clear answer to three questions:
+
+1. **Which schemes are relevant to me?**
+2. **Am I eligible, and what is the proof?**
+3. **What exactly should I do next?**
+
+## ✨ Key Features
+
+| Feature | Description |
+|---|---|
+| 🔍 Scheme matching | Shortlists relevant schemes by sector, stage, and state |
+| ✅ Eligibility reasoning | Each rule is marked **met / not met / unknown** |
+| 📌 Clause-level citations | Every decision shows the exact clause and page number from the official document |
+| ⚠️ Gap detection | Lists missing requirements, ordered by how blocking they are |
+| 📄 Document checklist | Shows what to prepare and where to get it |
+| 🗓️ Action plan | A dated, prioritized plan to apply |
+
+**Bonus features:** application draft generation · Hindi output · document upload to auto-fill the profile · incubator matching · multiple scheme sources
+
+## 🧠 How It Works
+
+```
+Startup Profile
+      ↓
+Find Relevant Schemes
+      ↓
+Extract Rules from Official Documents (LLM + citations)
+      ↓
+Check Eligibility (deterministic Python)
+      ↓
+Detect Missing Requirements
+      ↓
+Document Checklist
+      ↓
+Action Plan
+```
+
+### 🔑 Key Design Principle: no hallucinated eligibility
+
+Most tools paste a PDF into an LLM and ask "am I eligible?". SchemeScout does not.
+
+| Step | Done by | Why |
+|---|---|---|
+| Read documents and extract rules | LLM | Good at understanding text |
+| Verify each quote exists on the cited page | Python | Rejects fabricated clauses |
+| Decide met / not met / unknown | **Python (deterministic)** | Same input always gives the same answer |
+| Explain results and write the plan | LLM | Good at clear language, using only extracted clauses |
+
+If profile data is missing, the answer is **unknown**, never a guess.
+
+## 🏗️ Architecture
+
+```
+schemescout/
+├── .github/
+│   ├── copilot-instructions.md   # Rules that guide GitHub Copilot
+│   ├── agents/schemescout.agent.md
+│   └── workflows/ci.yml
+├── data/
+│   ├── schemes/                  # Official scheme documents
+│   └── profiles/                 # Sample startup profiles
+├── src/
+│   ├── models.py                 # Profile, Rule, Citation, RuleResult, Scheme
+│   ├── ingest.py                 # PDF to text, keeping page numbers
+│   ├── extract.py                # LLM rule extraction + quote verification
+│   ├── evaluate.py               # Deterministic eligibility engine
+│   ├── plan.py                   # Gaps, checklist, action plan
+│   └── agent.py                  # Orchestrates the full pipeline
+├── app/
+│   └── streamlit_app.py          # User interface
+├── tests/
+├── requirements.txt
+└── README.md
+```
+
+## 🛠️ Tech Stack
+
+- **Language:** Python 3.11
+- **Data validation:** Pydantic v2
+- **UI:** Streamlit
+- **PDF parsing:** pypdf
+- **Testing:** pytest
+- **AI:** [Your LLM provider / model]
+- **Development:** GitHub Copilot (agent mode, coding agent, code review)
+
+## 🚀 Getting Started
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/[your-username]/schemescout.git
+cd schemescout
 python -m venv .venv
-.venv\Scripts\activate
-python -m pip install -r requirements.txt
-python -m streamlit run app/streamlit_app.py
+
+# Windows: .venv\Scripts\Activate.ps1
+# Mac/Linux: source .venv/bin/activate
+
+pip install -r requirements.txt
 ```
 
-Run the test suite with `python -m pytest`.
+### 2. Configure environment
 
-## Data
+Create a `.env` file:
 
-Three example startup profiles are provided in `data/profiles`. The authoritative scheme catalog is `data/schemes/registry.json`; it is currently empty because no official scheme sources have been reviewed. Add a scheme only after reviewing its official source. Each registry item contains `id`, `name`, `authority`, `source_url`, `file_path`, `last_verified_date`, and `tags` (`sector`, `stage`, and `state` lists). For example:
-
-```json
-{
-  "schemes": [
-    {
-      "id": "scheme-id",
-      "name": "Official scheme name",
-      "authority": "Issuing authority",
-      "source_url": "https://example.gov/scheme",
-      "file_path": "data/schemes/scheme-id.pdf",
-      "last_verified_date": "2026-10-01",
-      "tags": {
-        "sector": ["agri-tech"],
-        "stage": ["early"],
-        "state": ["Karnataka"]
-      }
-    }
-  ]
-}
+```
+LLM_PROVIDER=[your provider]
+LLM_API_KEY=[your key]
 ```
 
-Registry entries are validated on load. When the registry exists, it is authoritative; if it is absent, existing `<scheme-id>.json` definitions continue to load for backward compatibility. Every extracted rule must cite its source document, page number, and exact clause. Do not infer eligibility requirements or fill missing profile values.
+### 3. Add official scheme documents
 
-## Extract rules from a scheme PDF
+Download scheme PDFs from official sources (for example Startup India or SIDBI) into `data/schemes/`.
 
-Configure an OpenAI-compatible chat-completions provider before calling
-`src.extract.extract_rules`:
+### 4. Run the app
 
-```powershell
-$env:SCHEMESCOUT_LLM_BASE_URL = "https://provider.example/v1"
-$env:SCHEMESCOUT_LLM_MODEL = "your-model"
-$env:SCHEMESCOUT_LLM_API_KEY = "your-api-key"
+```bash
+streamlit run app/streamlit_app.py
 ```
 
-The API key is optional for providers that do not require authentication.
-Verified extractions are cached as `data/schemes/<scheme-id>.rules.json` and
-refreshed when the source page text changes. Rules without an exact quoted
-clause found on the cited page are discarded; conditions that cannot map to a
-profile field are returned for manual review.
+### 5. Run the tests
 
-## Application planning
-
-`src.plan.find_gaps` ranks unmet and unknown requirements, while
-`src.plan.build_checklist` maps cited profile-field rules to supporting
-documents and where to obtain them. `src.plan.make_plan` creates dated,
-prioritized actions that retain their rule IDs and source clauses. When the
-LLM provider above is configured, it is used only to rephrase each action;
-dates, priorities, requirements, and citations remain code-controlled. An
-optional `llm_call` argument can be passed for testing or custom phrasing.
-
-## Run the agent pipeline
-
-Add each scheme and its official PDF path to `data/schemes/registry.json`.
-Empty targeting lists mean the scheme is unrestricted for that dimension.
-Profiles may include a `stage`; when a scheme targets stages and the profile
-stage is missing, it is not selected. The app shows the last verification date
-and warns when that date is more than six months old. The agent extracts
-citation-verified rules into the adjacent `<scheme-id>.rules.json` cache and
-returns a structured report:
-
-```python
-from src.agent import run_agent
-
-report = run_agent("startup-001")
-print(report.model_dump_json(indent=2))
+```bash
+pytest
 ```
 
-Pipeline tool events are logged and included in `report.events`. Each
-recoverable step is attempted at most three times; a scheme failure is
-reported without hiding successful results for other schemes.
+## 📖 Usage
 
-To rerun extraction for every catalog entry, configure the provider above and
-run `python -m scripts.refresh_rules`. This bypasses existing extraction
-caches, compares refreshed rule IDs and contents independent of ordering, and
-prints added, removed, or modified rules. Invalid or unsupported citations
-remain excluded by the normal extraction pipeline.
+1. Choose a sample startup profile or fill in your own.
+2. View the ranked list of relevant schemes.
+3. Open a scheme to see each eligibility rule with ✅ / ❌ / ❓ and the quoted clause with page number.
+4. Review missing requirements and the document checklist.
+5. Download your dated action plan (and application draft).
 
-## Application draft
+## 🎬 Example
 
-`src.draft.generate_draft(profile, scheme, results)` produces a Markdown
-application draft using only fields supplied in the profile. Missing values
-are shown as `[NEEDS INPUT]`; each eligibility rule includes its result and
-source citation. The Streamlit scheme view displays the draft and provides a
-Markdown download. Review all draft content before submitting; it is generated
-guidance, not an official application.
+**Profile:** Early-stage agritech startup, Haryana, DPIIT recognized, incorporated 2 years ago.
 
-## Hindi output
+| Scheme | Verdict | Missing |
+|---|---|---|
+| [Scheme A] | ✅ Eligible | None |
+| [Scheme B] | ⚠️ Needs info | Turnover details |
+| [Scheme C] | ❌ Not eligible | Incorporation age limit exceeded (Clause X, p. Y) |
 
-Choose **हिन्दी** from the Streamlit output-language selector to translate
-verdict summaries, gap explanations, checklist instructions, and action steps.
-This uses the configured OpenAI-compatible chat-completions provider described
-above. If it is not configured or a translation fails, the app reports that
-clearly and shows the original English. Citations, quoted clauses, document
-and scheme names, page numbers, dates, numeric values, and official terms such
-as DPIIT are protected from translation. UI text uses a Devanagari-capable
-system-font fallback. Hindi output includes: “यह केवल मार्गदर्शन है, कानूनी या
-वित्तीय सलाह नहीं।” The Markdown download preserves Hindi; because the built-in
-PDF font is Latin-only, the PDF download remains English.
+## 🤖 Built with GitHub Copilot
 
-## Autofill from uploaded documents
+GitHub Copilot was the development team for this project:
 
-The Streamlit profile view accepts PDF uploads for a DPIIT recognition
-certificate, certificate of incorporation, and one-page financial summary.
-After extraction, review and edit the values, source pages, and confidence in
-the table; values are applied only when their **Confirm** box is selected.
-Conflicting assertions from different documents are flagged and require
-selecting at most one source. Fields that are not found remain empty. Uploaded
-PDFs are processed using temporary files that are removed after analysis; the
-app does not persist uploaded files after the session. Document extraction
-requires the configured LLM provider above and is guidance for review, not
-verification of the uploaded document.
+- **Agent mode (VS Code):** scaffolded the project and implemented the modules.
+- **Copilot coding agent:** built features from GitHub issues and opened PRs.
+- **Copilot code review:** reviewed every pull request.
+- **Custom instructions:** `.github/copilot-instructions.md` enforced our rules (citations required, no guessing, deterministic eligibility).
+
+**Prompts used and results:** see [`PROMPTS.md`](PROMPTS.md).
+
+| Metric | Result |
+|---|---|
+| Code written with Copilot | [__%] |
+| Time saved (estimate) | [__ hours] |
+| Tests passing | [__ / __] |
+
+## 🔒 Responsible AI
+
+- Every eligibility conclusion is backed by a quoted clause and page number.
+- Quotes are programmatically verified against the source text.
+- Missing data produces "unknown", never an assumption.
+- Uploaded documents are not stored after the session.
+- Eligibility decisions are made by deterministic code, so they are reproducible and testable.
+
+## 🗺️ Roadmap
+
+- [x] Startup profile and scheme matching
+- [x] Eligibility engine with citations
+- [x] Gap detection, checklist, action plan
+- [ ] Application draft generation
+- [ ] Hindi and other Indic languages
+- [ ] Document upload to auto-fill the profile
+- [ ] Incubator matching
+- [ ] State-level scheme coverage
+
+## ⚠️ Disclaimer
+
+SchemeScout provides guidance only. It is not legal or financial advice. Always verify eligibility and requirements with the official scheme authority before applying. Scheme terms change, so check the last verified date for each document.
+
+## 👥 Team
+
+| Name | Role |
+|---|---|
+| [Your Name] | [Role] |
+
+## 📄 License
+
+MIT License. See [LICENSE](LICENSE).
