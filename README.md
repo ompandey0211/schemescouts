@@ -19,6 +19,19 @@ Run the test suite with `python -m pytest`.
 
 Three example startup profiles are provided in `data/profiles`. The `data/schemes` directory intentionally has no scheme definitions. Add a scheme only after reviewing its official source; each rule must include a citation with the source document, page number, and exact clause. Do not infer eligibility requirements or fill missing profile values.
 
+Incubator and accelerator programme definitions belong in `data/incubators`.
+That directory intentionally contains no fabricated programme documents.
+When official material is available, add `<id>.pdf` and `<id>.json`; the JSON
+uses the same targeting fields as schemes and must set `"kind": "incubator"`.
+The app reuses the citation-verified PDF extraction and deterministic rule
+evaluation pipeline, and shows no matches until definitions and source PDFs
+are supplied. Fit scores are deterministic: `src.matching.FIT_SCORE_WEIGHTS`
+assigns 20 points each to sector, stage, and location matches, and 40 points
+to the share of extracted eligibility rules met. Missing profile values do
+not match a restricted target; with no extracted rules, the eligibility
+component receives no points. Every displayed eligibility result retains its
+verified source clause and page.
+
 ## Extract rules from a scheme PDF
 
 Configure an OpenAI-compatible chat-completions provider before calling

@@ -7,6 +7,8 @@ import pytest
 from pypdf import PdfReader
 from streamlit.testing.v1 import AppTest
 
+import src.agent as agent
+import src.ingest as ingest
 import app.streamlit_app as streamlit_app
 from src.extract import RuleExtraction
 from src.evaluate import evaluate
@@ -226,6 +228,101 @@ def test_app_analyzes_selected_profile_and_shows_empty_scheme_state() -> None:
         "No relevant scheme definitions" in info.value
         for info in app.info
     )
+
+
+def test_app_displays_incubators_tab_and_empty_state() -> None:
+    app = AppTest.from_file(str(APP_PATH)).run()
+    app.button[0].click().run()
+
+    assert not app.exception
+    assert "Incubators" in [tab.label for tab in app.tabs]
+    assert any(
+        "No incubator programme definitions are available" in info.value
+        for info in app.info
+    )
+
+
+def test_incubators_tab_shows_rank_and_verified_clause(
+    monkeypatch,
+) -> None:
+    incubator = Scheme(
+        id="test-incubator",
+        name="Test incubator",
+        kind="incubator",
+        sectors=["agri-tech"],
+        stages=["growth"],
+        states=["Karnataka"],
+        rules=[
+            Rule(
+                id="sector",
+                field="sector",
+                operator="equals",
+                value="agri-tech",
+                citations=[CITATION],
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        ingest,
+        "load_schemes",
+        lambda directory: (
+            [incubator] if directory == streamlit_app.INCUBATORS_DIR else []
+        ),
+    )
+    monkeypatch.setattr(
+        agent,
+        "extract_rules_tool",
+        lambda target, directory: RuleExtraction(rules=target.rules),
+    )
+
+    app = AppTest.from_file(str(APP_PATH)).run()
+    app.button[0].click().run()
+
+    assert not app.exception
+    assert any(
+        "Test incubator" in item.value and "100/100" in item.value
+        for item in app.markdown
+    ), [
+        item.value
+        for collection in (app.markdown, app.info, app.warning, app.error)
+        for item in collection
+    ]
+    assert any(CITATION.exact_clause in item.value for item in app.markdown)
+
+
+def test_incubator_analysis_reuses_extraction_and_evaluation(monkeypatch) -> None:
+    incubator = Scheme(
+        id="test-incubator",
+        name="Test incubator",
+        kind="incubator",
+        sectors=["agri-tech"],
+        rules=[
+            Rule(
+                id="sector",
+                field="sector",
+                operator="equals",
+                value="agri-tech",
+                citations=[CITATION],
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        streamlit_app,
+        "extract_rules_tool",
+        lambda target, directory: RuleExtraction(rules=target.rules),
+    )
+
+    analyses = streamlit_app.run_analysis(
+        SAMPLE_PROFILE,
+        [incubator],
+        streamlit_app.INCUBATORS_DIR,
+        filter_relevant=False,
+    )
+
+    assert len(analyses) == 1
+    assert analyses[0]["scheme"].kind == "incubator"
+    assert analyses[0]["results"][0].status == "met"
+    assert analyses[0]["results"][0].citations == [CITATION]
 
 
 def test_app_custom_profile_form_validates_and_waits_for_submit() -> None:

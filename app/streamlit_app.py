@@ -31,6 +31,7 @@ from src.doc_analysis import (
 )
 from src.evaluate import overall_verdict
 from src.ingest import load_profiles, load_schemes
+from src.matching import incubator_fit_reasons, rank_incubators
 from src.models import Profile, Scheme
 from src.plan import ChecklistItem, PlanStep, RequirementGap
 from src.translate import translate_items
@@ -38,6 +39,7 @@ from src.translate import translate_items
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES_DIR = ROOT / "data" / "profiles"
 SCHEMES_DIR = ROOT / "data" / "schemes"
+INCUBATORS_DIR = ROOT / "data" / "incubators"
 logger = logging.getLogger(__name__)
 
 
@@ -220,12 +222,19 @@ def plan_pdf(markdown: str) -> bytes:
     return pdf_buffer.getvalue()
 
 
-def run_analysis(profile: Profile, schemes: list[Scheme]) -> list[dict[str, object]]:
-    """Run each relevant scheme through citation extraction and planning."""
+def run_analysis(
+    profile: Profile,
+    schemes: list[Scheme],
+    documents_dir: Path = SCHEMES_DIR,
+    *,
+    filter_relevant: bool = True,
+) -> list[dict[str, object]]:
+    """Run programmes through shared citation extraction and evaluation."""
     analyses: list[dict[str, object]] = []
-    for scheme in rank_relevant_schemes(profile, schemes):
+    targets = rank_relevant_schemes(profile, schemes) if filter_relevant else schemes
+    for scheme in targets:
         try:
-            extraction = extract_rules_tool(scheme, SCHEMES_DIR)
+            extraction = extract_rules_tool(scheme, documents_dir)
             evaluated_scheme = scheme.model_copy(update={"rules": extraction.rules})
             results = evaluate_tool(profile, evaluated_scheme)
             analyses.append(
@@ -240,7 +249,7 @@ def run_analysis(profile: Profile, schemes: list[Scheme]) -> list[dict[str, obje
                 }
             )
         except Exception as exc:
-            logger.exception("Could not analyze scheme %s", scheme.id)
+            logger.exception("Could not analyze %s %s", scheme.kind, scheme.id)
             analyses.append({"scheme": scheme, "error": str(exc)})
     return analyses
 
@@ -444,6 +453,7 @@ st.caption("Eligibility checks are deterministic; no conclusion is made without 
 try:
     profiles = load_profiles(PROFILES_DIR)
     schemes = load_schemes(SCHEMES_DIR)
+    incubators = load_schemes(INCUBATORS_DIR)
 except (OSError, ValueError) as exc:
     st.error(f"Could not load SchemeScout data: {exc}")
     st.stop()
@@ -462,6 +472,12 @@ else:
         with st.spinner("Finding relevant schemes and checking cited requirements..."):
             st.session_state["scheme_scout_analyses"] = run_analysis(
                 selected_profile, schemes
+            )
+            st.session_state["scheme_scout_incubator_analyses"] = run_analysis(
+                selected_profile,
+                incubators,
+                INCUBATORS_DIR,
+                filter_relevant=False,
             )
 
     profile_data = st.session_state.get("scheme_scout_profile")
@@ -568,6 +584,14 @@ else:
                         st.session_state["scheme_scout_analyses"] = run_analysis(
                             updated_profile, schemes
                         )
+                        st.session_state["scheme_scout_incubator_analyses"] = (
+                            run_analysis(
+                                updated_profile,
+                                incubators,
+                                INCUBATORS_DIR,
+                                filter_relevant=False,
+                            )
+                        )
                         st.success(
                             "Confirmed fields were applied to the profile."
                         )
@@ -577,34 +601,108 @@ else:
 
     if profile_data and analyses is not None:
         profile = Profile.model_validate(profile_data)
+        incubator_analyses = st.session_state.get(
+            "scheme_scout_incubator_analyses", []
+        )
         ranked = [
             analysis
             for analysis in analyses
             if "error" not in analysis
         ]
-        st.header("Relevant schemes")
-        if not analyses:
-            st.info(
-                "No relevant scheme definitions were found. Add official scheme "
-                "documents and matching definitions under data/schemes."
-            )
-        for index, analysis in enumerate(analyses, start=1):
-            scheme = analysis["scheme"]
-            if "error" in analysis:
-                st.warning(f"{index}. {scheme.name}: {analysis['error']}")
-                continue
-            st.write(f"**{index}. {scheme.name}**")
-            target_dimensions = []
-            if scheme.sectors:
-                target_dimensions.append(f"Sector: {', '.join(scheme.sectors)}")
-            if scheme.stages:
-                target_dimensions.append(f"Stage: {', '.join(scheme.stages)}")
-            if scheme.states:
-                target_dimensions.append(f"State: {', '.join(scheme.states)}")
-            st.caption(
-                f"Match score {scheme_match_score(scheme)} · "
-                f"{'; '.join(target_dimensions) or 'General scheme'}"
-            )
+        schemes_tab, incubators_tab = st.tabs(["Schemes", "Incubators"])
+        with schemes_tab:
+            st.header("Relevant schemes")
+            if not analyses:
+                st.info(
+                    "No relevant scheme definitions were found. Add official scheme "
+                    "documents and matching definitions under data/schemes."
+                )
+            for index, analysis in enumerate(analyses, start=1):
+                scheme = analysis["scheme"]
+                if "error" in analysis:
+                    st.warning(f"{index}. {scheme.name}: {analysis['error']}")
+                    continue
+                st.write(f"**{index}. {scheme.name}**")
+                target_dimensions = []
+                if scheme.sectors:
+                    target_dimensions.append(f"Sector: {', '.join(scheme.sectors)}")
+                if scheme.stages:
+                    target_dimensions.append(f"Stage: {', '.join(scheme.stages)}")
+                if scheme.states:
+                    target_dimensions.append(f"State: {', '.join(scheme.states)}")
+                st.caption(
+                    f"Match score {scheme_match_score(scheme)} · "
+                    f"{'; '.join(target_dimensions) or 'General scheme'}"
+                )
+        with incubators_tab:
+            st.subheader("Ranked incubator and accelerator matches")
+            successful_incubator_analyses = [
+                analysis
+                for analysis in incubator_analyses
+                if "error" not in analysis
+            ]
+            failed_incubator_analyses = [
+                analysis
+                for analysis in incubator_analyses
+                if "error" in analysis
+            ]
+            if not incubators:
+                st.info(
+                    "No incubator programme definitions are available. Add official "
+                    "programme PDFs and matching JSON definitions under "
+                    "data/incubators; no matches are shown until sources are provided."
+                )
+            if successful_incubator_analyses:
+                ranked_incubators = rank_incubators(
+                    profile,
+                    [
+                        (analysis["scheme"], analysis["results"])
+                        for analysis in successful_incubator_analyses
+                    ],
+                )
+                for rank, (incubator, results, score) in enumerate(
+                    ranked_incubators, start=1
+                ):
+                    st.markdown(f"**{rank}. {incubator.name} — {score}/100**")
+                    for reason in incubator_fit_reasons(
+                        profile, incubator, results
+                    ):
+                        st.write(f"- {reason}")
+                    if results:
+                        with st.expander(
+                            f"Verified clauses — {incubator.name}"
+                        ):
+                            for result in results:
+                                st.markdown(
+                                    f"**Rule `{result.rule_id}` · "
+                                    f"{result.status.replace('_', ' ')}**"
+                                )
+                                if result.citations:
+                                    for citation in result.citations:
+                                        st.write(f'“{citation.exact_clause}”')
+                                        st.caption(
+                                            f"{citation.document}, page {citation.page}"
+                                        )
+                                else:
+                                    st.warning(
+                                        "No verified source clause is available for "
+                                        "this rule."
+                                    )
+                    analysis = next(
+                        analysis
+                        for analysis in successful_incubator_analyses
+                        if analysis["scheme"] is incubator
+                    )
+                    for item in analysis["extraction"].manual_review:
+                        st.warning(f"Manual review: {item.condition}")
+                        st.caption(
+                            f"{item.citation.document}, page {item.citation.page}: "
+                            f"“{item.citation.exact_clause}”"
+                        )
+            for analysis in failed_incubator_analyses:
+                st.warning(
+                    f"{analysis['scheme'].name}: {analysis['error']}"
+                )
 
         if ranked:
             selected_scheme_id = st.selectbox(

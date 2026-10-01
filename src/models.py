@@ -73,6 +73,7 @@ class Scheme(BaseModel):
 
     id: str
     name: str
+    kind: Literal["scheme", "incubator"] = "scheme"
     description: str | None = None
     sectors: list[str] = Field(default_factory=list)
     stages: list[str] = Field(default_factory=list)
