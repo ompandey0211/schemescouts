@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -11,6 +10,7 @@ from pydantic import ValidationError
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
+from src.config import get_llm_settings
 from src.agent import (
     build_checklist_tool,
     evaluate_tool,
@@ -62,14 +62,13 @@ def _translated_display(
     """Translate an allowed display string and visibly report provider failures."""
     if target_lang == "en":
         return text
-    if not (
-        os.environ.get("SCHEMESCOUT_LLM_BASE_URL")
-        and os.environ.get("SCHEMESCOUT_LLM_MODEL")
-    ):
+    settings = get_llm_settings()
+    if not (settings.base_url and settings.model):
         if "translation_configuration_warning" not in st.session_state:
             st.warning(
-                "Hindi translation needs SCHEMESCOUT_LLM_BASE_URL and "
-                "SCHEMESCOUT_LLM_MODEL; untranslated English is shown until configured."
+                "Hindi translation needs LLM_PROVIDER and LLM_MODEL (or the "
+                "SCHEMESCOUT_LLM_BASE_URL and SCHEMESCOUT_LLM_MODEL aliases); "
+                "untranslated English is shown until configured."
             )
             st.session_state["translation_configuration_warning"] = True
         return text

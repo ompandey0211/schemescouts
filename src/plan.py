@@ -1,11 +1,11 @@
 import logging
-import os
 from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.config import get_llm_settings
 from src.extract import _call_llm
 from src.models import Citation, Profile, RuleResult, Scheme, SchemeEvaluation
 
@@ -180,10 +180,8 @@ def build_checklist(scheme: Scheme, results: list[RuleResult]) -> list[Checklist
 
 
 def _phrase_action(action: str, llm_call: PhraseCall | None) -> str:
-    if llm_call is None and not (
-        os.environ.get("SCHEMESCOUT_LLM_BASE_URL")
-        and os.environ.get("SCHEMESCOUT_LLM_MODEL")
-    ):
+    settings = get_llm_settings()
+    if llm_call is None and not (settings.base_url and settings.model):
         return action
     phrase_call = llm_call or _call_llm
     prompt = (

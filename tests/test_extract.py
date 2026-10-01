@@ -1,5 +1,6 @@
 import json
 import logging
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -7,6 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from src.extract import (
+    DEFAULT_CACHE_DIR,
     ManualReviewItem,
     RuleExtraction,
     _build_prompt,
@@ -52,6 +54,12 @@ def test_source_digest_changes_when_source_or_document_changes() -> None:
 
 def test_cache_path_uses_scheme_id_under_cache_directory(tmp_path: Path) -> None:
     assert _cache_path("scheme_01", tmp_path) == tmp_path / "scheme_01.rules.json"
+
+
+def test_default_rule_cache_is_outside_the_repository() -> None:
+    assert DEFAULT_CACHE_DIR == (
+        Path(tempfile.gettempdir()) / "schemescout" / "rule-cache"
+    )
 
 
 def test_cache_path_rejects_path_traversal(tmp_path: Path) -> None:

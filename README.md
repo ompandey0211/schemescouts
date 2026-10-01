@@ -34,6 +34,29 @@ python -m streamlit run app/streamlit_app.py
 
 Run the tests with `python -m pytest`.
 
+## Deploy on Render
+
+1. Push this repository to GitHub and create a new **Blueprint** in Render,
+   selecting the repository and branch to deploy.
+2. Render reads `render.yaml` and creates the free Python web service. The
+   service installs the pinned dependencies and starts Streamlit on Render's
+   assigned `$PORT`.
+3. In the service environment settings, provide `LLM_PROVIDER` as the base
+   URL of an OpenAI-compatible chat-completions API, `LLM_MODEL` as the model
+   identifier, and `LLM_API_KEY` as a secret. These values are not stored in
+   `render.yaml`. The corresponding legacy `SCHEMESCOUT_LLM_*` variables are
+   also supported. Without provider and model settings, the app still starts;
+   optional extraction and translation report that configuration is needed.
+4. Redeploy after changing environment settings.
+
+An optional local `.env` file is read when present and is ignored by Git.
+Uploaded documents and extracted-rule caches are written only to temporary
+directories; temporary caches may be lost when Render restarts the service.
+Persistent programme documents and profile data must be committed to the
+repository. This starter repository includes sample profiles, but no official
+scheme PDFs, scheme definitions, or cached rule files, so it currently has no
+scheme matches to show.
+
 ## Built with GitHub Copilot
 
 The repository history records Copilot App as a co-author on the two
@@ -93,8 +116,8 @@ restricted target; no extracted rules contribute no eligibility points.
 The app uses an OpenAI-compatible chat-completions provider for extracting
 rules from PDF text and optional Hindi translations. The provider and model
 used for this project have not been identified and are marked TBD above. Set
-the following environment variables to your own provider configuration before
-using these features:
+the following environment variables in a local `.env` file (or configure the
+Render variables above) before using these features:
 
 ```text
 SCHEMESCOUT_LLM_BASE_URL=TBD
@@ -103,10 +126,10 @@ SCHEMESCOUT_LLM_API_KEY=TBD
 ```
 
 The API key is optional for providers that do not require authentication. Do
-not commit real API keys. Verified extractions are cached alongside their
-source PDFs and refreshed when the source page text changes. Conditions that
-cannot be mapped to a profile field are retained for manual review with their
-source citations.
+not commit real API keys. Verified extraction caches are written under the
+system temporary directory and refreshed when source page text changes.
+Conditions that cannot be mapped to a profile field are retained for manual
+review with their source citations.
 
 ## Application planning and drafts
 

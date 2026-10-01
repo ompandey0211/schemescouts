@@ -11,6 +11,7 @@ from src.agent import (
     AgentEvent,
     AgentReport,
     MAX_ATTEMPTS,
+    RULE_CACHE_DIR,
     _matches_target,
     _record_event,
     _run_with_retries,
@@ -24,7 +25,7 @@ from src.agent import (
     make_plan_tool,
     run_agent,
 )
-from src.extract import extract_rules
+from src.extract import RuleExtraction, extract_rules
 from src.ingest import PDFPage, load_profiles, load_schemes
 from src.models import Citation, Profile, Rule, RuleResult, Scheme
 from src.plan import ChecklistItem, PlanStep, RequirementGap
@@ -198,10 +199,38 @@ def test_extract_rules_tool_reads_verified_rules_from_cache(tmp_path: Path) -> N
     )
     events: list[AgentEvent] = []
 
-    extracted = extract_rules_tool(scheme, tmp_path, events=events)
+    extracted = extract_rules_tool(
+        scheme, tmp_path, cache_dir=tmp_path, events=events
+    )
 
     assert extracted.rules == [rule]
     assert events[-1].step == "extract_rules"
+
+
+def test_extract_rules_tool_defaults_cache_outside_programme_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scheme = Scheme(id="temp-cache", name="Temp cache")
+    _write_text_pdf(tmp_path / "temp-cache.pdf", TEST_CITATION.exact_clause)
+    observed: dict[str, object] = {}
+
+    def fake_extract_rules(
+        pages: list[PDFPage],
+        scheme_id: str,
+        document: str,
+        *,
+        cache_dir: Path,
+    ) -> RuleExtraction:
+        observed["cache_dir"] = cache_dir
+        return RuleExtraction()
+
+    monkeypatch.setattr("src.agent.extract_rules", fake_extract_rules)
+
+    extract_rules_tool(scheme, tmp_path)
+
+    assert observed["cache_dir"] == RULE_CACHE_DIR
+    assert RULE_CACHE_DIR != tmp_path
 
 
 def test_evaluate_tool_returns_rule_results() -> None:
@@ -390,6 +419,7 @@ def test_run_agent_end_to_end_uses_cached_scheme_rules(tmp_path: Path) -> None:
         profile.id,
         profiles_dir=profiles_dir,
         schemes_dir=schemes_dir,
+        rule_cache_dir=schemes_dir,
         llm_call=Mock(return_value="Rephrased action."),
     )
 

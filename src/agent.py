@@ -7,7 +7,12 @@ from typing import Literal, TypeVar
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.evaluate import OverallVerdict, evaluate, evaluate_scheme, overall_verdict
-from src.extract import ManualReviewItem, RuleExtraction, extract_rules
+from src.extract import (
+    DEFAULT_CACHE_DIR,
+    ManualReviewItem,
+    RuleExtraction,
+    extract_rules,
+)
 from src.ingest import PDFPage, load_pdf_pages, load_profiles, load_schemes
 from src.models import Profile, RuleResult, Scheme, SchemeEvaluation
 from src.plan import (
@@ -21,6 +26,7 @@ from src.plan import (
 
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 3
+RULE_CACHE_DIR = DEFAULT_CACHE_DIR
 T = TypeVar("T")
 RetryableStep = Callable[[], T]
 
@@ -174,16 +180,17 @@ def extract_rules_tool(
     scheme: Scheme,
     schemes_dir: Path,
     *,
+    cache_dir: Path = RULE_CACHE_DIR,
     events: list[AgentEvent] | None = None,
 ) -> RuleExtraction:
-    """Read a scheme PDF and extract (or load cached) citation-verified rules."""
+    """Read a programme PDF and cache verified rules outside its source directory."""
     pdf_path = schemes_dir / f"{scheme.id}.pdf"
     pages: list[PDFPage] = load_pdf_pages(pdf_path)
     extracted = extract_rules(
         pages,
         scheme_id=scheme.id,
         document=pdf_path.name,
-        cache_dir=schemes_dir,
+        cache_dir=cache_dir,
     )
     _record_event(
         events,
@@ -275,6 +282,7 @@ def run_agent(
     *,
     profiles_dir: Path | None = None,
     schemes_dir: Path | None = None,
+    rule_cache_dir: Path = RULE_CACHE_DIR,
     max_attempts: int = MAX_ATTEMPTS,
     llm_call: Callable[[str], str] | None = None,
 ) -> AgentReport:
@@ -320,7 +328,7 @@ def run_agent(
             extracted = _run_with_retries(
                 "extract_rules",
                 lambda target=target_scheme: extract_rules_tool(
-                    target, scheme_directory
+                    target, scheme_directory, cache_dir=rule_cache_dir
                 ),
                 report.events,
                 max_attempts,

@@ -1,20 +1,21 @@
 import hashlib
 import json
 import logging
-import os
 import re
+import tempfile
 import urllib.request
 from pathlib import Path
 from typing import Callable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.config import get_llm_settings
 from src.ingest import PDFPage
 from src.models import Citation, Profile, Rule
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CACHE_DIR = Path(__file__).resolve().parents[1] / "data" / "schemes"
+DEFAULT_CACHE_DIR = Path(tempfile.gettempdir()) / "schemescout" / "rule-cache"
 LLMCall = Callable[[str], str]
 
 
@@ -100,12 +101,14 @@ def _build_prompt(pages: list[PDFPage], document: str) -> str:
 
 
 def _call_llm(prompt: str, *, json_mode: bool = False) -> str:
-    base_url = os.environ.get("SCHEMESCOUT_LLM_BASE_URL")
-    model = os.environ.get("SCHEMESCOUT_LLM_MODEL")
+    settings = get_llm_settings()
+    base_url = settings.base_url
+    model = settings.model
     if not base_url or not model:
         raise RuntimeError(
-            "Set SCHEMESCOUT_LLM_BASE_URL and SCHEMESCOUT_LLM_MODEL to configure "
-            "an OpenAI-compatible chat-completions provider."
+            "Set SCHEMESCOUT_LLM_BASE_URL (or LLM_PROVIDER) and "
+            "SCHEMESCOUT_LLM_MODEL (or LLM_MODEL) to configure an "
+            "OpenAI-compatible chat-completions provider."
         )
 
     endpoint = base_url.rstrip("/")
@@ -126,7 +129,7 @@ def _call_llm(prompt: str, *, json_mode: bool = False) -> str:
         request_body["response_format"] = {"type": "json_object"}
     payload = json.dumps(request_body).encode("utf-8")
     headers = {"Content-Type": "application/json"}
-    api_key = os.environ.get("SCHEMESCOUT_LLM_API_KEY")
+    api_key = settings.api_key
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
