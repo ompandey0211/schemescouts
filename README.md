@@ -17,7 +17,29 @@ Run the test suite with `python -m pytest`.
 
 ## Data
 
-Three example startup profiles are provided in `data/profiles`. The `data/schemes` directory intentionally has no scheme definitions. Add a scheme only after reviewing its official source; each rule must include a citation with the source document, page number, and exact clause. Do not infer eligibility requirements or fill missing profile values.
+Three example startup profiles are provided in `data/profiles`. The authoritative scheme catalog is `data/schemes/registry.json`; it is currently empty because no official scheme sources have been reviewed. Add a scheme only after reviewing its official source. Each registry item contains `id`, `name`, `authority`, `source_url`, `file_path`, `last_verified_date`, and `tags` (`sector`, `stage`, and `state` lists). For example:
+
+```json
+{
+  "schemes": [
+    {
+      "id": "scheme-id",
+      "name": "Official scheme name",
+      "authority": "Issuing authority",
+      "source_url": "https://example.gov/scheme",
+      "file_path": "data/schemes/scheme-id.pdf",
+      "last_verified_date": "2026-10-01",
+      "tags": {
+        "sector": ["agri-tech"],
+        "stage": ["early"],
+        "state": ["Karnataka"]
+      }
+    }
+  ]
+}
+```
+
+Registry entries are validated on load. When the registry exists, it is authoritative; if it is absent, existing `<scheme-id>.json` definitions continue to load for backward compatibility. Every extracted rule must cite its source document, page number, and exact clause. Do not infer eligibility requirements or fill missing profile values.
 
 ## Extract rules from a scheme PDF
 
@@ -48,13 +70,13 @@ optional `llm_call` argument can be passed for testing or custom phrasing.
 
 ## Run the agent pipeline
 
-Add a scheme definition as `data/schemes/<scheme-id>.json` with `id`, `name`,
-and optional `sectors`, `stages`, and `states` targeting lists. Put its official
-source PDF at `data/schemes/<scheme-id>.pdf`. Empty targeting lists mean the
-scheme is unrestricted for that dimension. Profiles may include a `stage`;
-when a scheme targets stages and the profile stage is missing, it is not
-selected. The agent extracts citation-verified rules into the adjacent
-`<scheme-id>.rules.json` cache and returns a structured report:
+Add each scheme and its official PDF path to `data/schemes/registry.json`.
+Empty targeting lists mean the scheme is unrestricted for that dimension.
+Profiles may include a `stage`; when a scheme targets stages and the profile
+stage is missing, it is not selected. The app shows the last verification date
+and warns when that date is more than six months old. The agent extracts
+citation-verified rules into the adjacent `<scheme-id>.rules.json` cache and
+returns a structured report:
 
 ```python
 from src.agent import run_agent
@@ -66,6 +88,12 @@ print(report.model_dump_json(indent=2))
 Pipeline tool events are logged and included in `report.events`. Each
 recoverable step is attempted at most three times; a scheme failure is
 reported without hiding successful results for other schemes.
+
+To rerun extraction for every catalog entry, configure the provider above and
+run `python -m scripts.refresh_rules`. This bypasses existing extraction
+caches, compares refreshed rule IDs and contents independent of ordering, and
+prints added, removed, or modified rules. Invalid or unsupported citations
+remain excluded by the normal extraction pipeline.
 
 ## Application draft
 

@@ -6,7 +6,15 @@ import pytest
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from src.ingest import PDFPage, _load_models, load_pdf_pages, load_profiles, load_schemes
+from src.ingest import (
+    PDFPage,
+    _load_models,
+    load_pdf_pages,
+    load_profiles,
+    load_scheme_registry,
+    load_schemes,
+    scheme_pdf_path,
+)
 from src.models import Profile, Scheme
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
@@ -89,6 +97,103 @@ def test_load_profiles_rejects_a_missing_directory(tmp_path: Path) -> None:
 
 def test_load_schemes_returns_empty_for_empty_directory(tmp_path: Path) -> None:
     assert load_schemes(tmp_path) == []
+
+
+def test_empty_scheme_registry_is_valid_and_authoritative(tmp_path: Path) -> None:
+    (tmp_path / "registry.json").write_text('{"schemes": []}', encoding="utf-8")
+    (tmp_path / "legacy.json").write_text(
+        Scheme(id="legacy", name="Legacy").model_dump_json(), encoding="utf-8"
+    )
+
+    assert load_scheme_registry(tmp_path).schemes == []
+    assert load_schemes(tmp_path) == []
+    assert load_schemes(DATA_DIR / "schemes") == []
+
+
+def test_load_schemes_validates_registry_and_maps_metadata(tmp_path: Path) -> None:
+    registry = {
+        "schemes": [
+            {
+                "id": "registered-scheme",
+                "name": "Registered Scheme",
+                "authority": "Ministry",
+                "source_url": "https://example.gov/scheme",
+                "file_path": "data/schemes/source.pdf",
+                "last_verified_date": "2026-10-01",
+                "tags": {
+                    "sector": ["agri-tech"],
+                    "stage": ["early"],
+                    "state": ["Karnataka"],
+                },
+            }
+        ]
+    }
+    (tmp_path / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+
+    scheme = load_schemes(tmp_path)[0]
+
+    assert scheme.id == "registered-scheme"
+    assert scheme.authority == "Ministry"
+    assert scheme.source_url == "https://example.gov/scheme"
+    assert scheme.file_path == "data/schemes/source.pdf"
+    assert scheme.last_verified_date.isoformat() == "2026-10-01"
+    assert scheme.sectors == ["agri-tech"]
+    assert scheme.stages == ["early"]
+    assert scheme.states == ["Karnataka"]
+
+
+def test_registry_rejects_invalid_schema_and_duplicate_ids(tmp_path: Path) -> None:
+    invalid_entry = {
+        "schemes": [
+            {
+                "id": "invalid/id",
+                "name": "Invalid",
+                "authority": "Ministry",
+                "source_url": "not-a-url",
+                "file_path": "scheme.pdf",
+                "last_verified_date": "not-a-date",
+                "tags": {},
+            }
+        ]
+    }
+    registry_path = tmp_path / "registry.json"
+    registry_path.write_text(json.dumps(invalid_entry), encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_scheme_registry(tmp_path)
+
+    entry = {
+        "id": "duplicate",
+        "name": "Duplicate",
+        "authority": "Ministry",
+        "source_url": "https://example.gov/scheme",
+        "file_path": "scheme.pdf",
+        "last_verified_date": "2026-10-01",
+        "tags": {},
+    }
+    registry_path.write_text(json.dumps({"schemes": [entry, entry]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="unique"):
+        load_scheme_registry(tmp_path)
+
+
+def test_scheme_pdf_path_supports_registry_and_legacy_paths(tmp_path: Path) -> None:
+    schemes_dir = tmp_path / "data" / "schemes"
+    schemes_dir.mkdir(parents=True)
+    project_pdf = tmp_path / "data" / "source.pdf"
+    project_pdf.write_bytes(b"pdf")
+    local_pdf = schemes_dir / "local.pdf"
+    local_pdf.write_bytes(b"pdf")
+
+    assert scheme_pdf_path(
+        Scheme(id="project", name="Project", file_path="data/source.pdf"),
+        schemes_dir,
+    ) == project_pdf
+    assert scheme_pdf_path(
+        Scheme(id="local", name="Local", file_path="local.pdf"), schemes_dir
+    ) == local_pdf
+    assert scheme_pdf_path(Scheme(id="legacy", name="Legacy"), schemes_dir) == (
+        schemes_dir / "legacy.pdf"
+    )
 
 
 def test_load_models_surfaces_invalid_json(tmp_path: Path) -> None:

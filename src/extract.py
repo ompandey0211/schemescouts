@@ -223,13 +223,14 @@ def extract_rules(
     *,
     cache_dir: Path | None = None,
     llm_call: LLMCall | None = None,
+    force_refresh: bool = False,
 ) -> RuleExtraction:
     """Extract citation-verified rules, using a source-aware cache when available."""
     if not document.strip():
         raise ValueError("document must not be empty.")
     destination = _cache_path(scheme_id, cache_dir)
     digest = _source_digest(pages, document)
-    if destination.is_file():
+    if destination.is_file() and not force_refresh:
         cached = _CachedExtraction.model_validate_json(
             destination.read_text(encoding="utf-8")
         )

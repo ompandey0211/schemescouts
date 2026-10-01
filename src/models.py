@@ -74,6 +74,10 @@ class Scheme(BaseModel):
     id: str
     name: str
     description: str | None = None
+    authority: str | None = None
+    source_url: str | None = None
+    file_path: str | None = None
+    last_verified_date: date | None = None
     sectors: list[str] = Field(default_factory=list)
     stages: list[str] = Field(default_factory=list)
     states: list[str] = Field(default_factory=list)

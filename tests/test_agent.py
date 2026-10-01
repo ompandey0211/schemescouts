@@ -171,6 +171,41 @@ def test_find_relevant_schemes_tool_excludes_targeted_schemes_if_profile_data_mi
     assert find_relevant_schemes_tool(profile, [scheme]) == []
 
 
+def test_find_relevant_schemes_tool_uses_registry_tags(tmp_path: Path) -> None:
+    profile = SAMPLE_PROFILES[0]
+    registry = {
+        "schemes": [
+            {
+                "id": "matching",
+                "name": "Matching",
+                "authority": "Ministry",
+                "source_url": "https://example.gov/matching",
+                "file_path": "matching.pdf",
+                "last_verified_date": "2026-10-01",
+                "tags": {
+                    "sector": [profile.sector],
+                    "stage": [profile.stage],
+                    "state": [profile.state],
+                },
+            },
+            {
+                "id": "other",
+                "name": "Other",
+                "authority": "Ministry",
+                "source_url": "https://example.gov/other",
+                "file_path": "other.pdf",
+                "last_verified_date": "2026-10-01",
+                "tags": {"sector": ["not-" + profile.sector]},
+            },
+        ]
+    }
+    (tmp_path / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+
+    relevant = find_relevant_schemes_tool(profile, load_schemes(tmp_path))
+
+    assert [scheme.id for scheme in relevant] == ["matching"]
+
+
 def test_extract_rules_tool_reads_verified_rules_from_cache(tmp_path: Path) -> None:
     scheme = Scheme(id="cached", name="Cached")
     pdf_path = tmp_path / "cached.pdf"
